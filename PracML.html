@@ -222,10 +222,9 @@ r</code></pre>
 <pre class="r"><code>set.seed(123)
 validationSet &lt;- read.csv(&quot;Data/pml-testing.csv&quot;,stringsAsFactors = TRUE)
 answers &lt;- as.character(predict(fitRF,validationSet))
-print(answers)</code></pre>
-<pre><code>##  [1] &quot;B&quot; &quot;A&quot; &quot;B&quot; &quot;A&quot; &quot;A&quot; &quot;E&quot; &quot;D&quot; &quot;B&quot; &quot;A&quot; &quot;A&quot; &quot;B&quot; &quot;C&quot; &quot;B&quot; &quot;A&quot; &quot;E&quot; &quot;E&quot; &quot;A&quot;
-## [18] &quot;B&quot; &quot;B&quot; &quot;B&quot;</code></pre>
-<pre class="r"><code>pml_write_files = function(x){
+#print(answers)
+
+pml_write_files = function(x){
   n = length(x)
   for(i in 1:n){
     filename = paste0(&quot;answers/problem_id_&quot;,i,&quot;.txt&quot;)

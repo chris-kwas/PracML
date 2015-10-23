@@ -173,7 +173,7 @@ Here a prediction using the above Random Forest model is made on new data that w
 set.seed(123)
 validationSet <- read.csv("Data/pml-testing.csv",stringsAsFactors = TRUE)
 answers <- as.character(predict(fitRF,validationSet))
-print(answers)
+#print(answers)
 
 pml_write_files = function(x){
   n = length(x)
