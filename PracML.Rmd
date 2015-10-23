@@ -186,6 +186,8 @@ pml_write_files(answers)
 
 ```
 
+Final edit: Predictions on the Coursera set was 100% correct.
+
 ##Appendix
 
 ##Recursive Partitioning
