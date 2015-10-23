@@ -1,0 +1,207 @@
+---
+title: "Practical Machine Learning"
+author: "Chris K"
+date: "October 13, 2015"
+output: html_document
+---
+
+##Executive Summary
+This paper demostrates highly accurate recognition of human motion thru the application of machine learning techniques.  It will be shown that accurate feedback can be provided.
+
+##Introduction
+In 2013 "Qualitative Activity Recognition of Weight Lifting Exercises" http://groupware.les.inf.puc-rio.br/public/papers/2013.Velloso.QAR-WLE.pdf was published. Our thanks to them for publishing this data.  It notes that traditionally research into activity recognition has focused on determining what activity is happening.  Many fitness tracker (i.e. FitBit) use this in trying to determine activity levels.  The authors wish to add to this the determination of how well an activity is done, the quality of the activity.  This is valuable since proper exercise technique is key to preventing injury as well as maximizing exercise benefit.
+
+Briefly (see the paper for details) several test subjects performed repetitions of an bicep curl.  They performed the activity both correctly and incorrectly using common mistakes.  The motions were captured by sensors that tracked body movements and then classified by machine learning into different classes.  Each class represent if the activity was done properly or improperly and what the type of mistake was.
+
+##Goal
+The purpose of THIS paper is to replicate the original paper's result.  Machine learning techniques will be applied to the original motion data in an attempt to identify when proper and improper techniques are happening.
+
+##Data Description
+
+Body motion was capture from four devices, one attached to the arm (upper arm), forearm, belt and dumbbell.  Each provided 9 degrees of motion capture - x,y,z of acceleration, gyroscope and magnetometer (compass).  No explicit data dictionary was given, however the paper describes how the data was collected and how additional features were calculated at a high level.  Combined with the names of the columns, this enabled exploratory data analysis to commence.
+
+The data set consists of 19622 observations of 160 variables.  The variables can be described as five groups.  The first group represents common data applicable across all sensors, such as the user name, and the classification of the activity.  Besides the classfication of the activity, these will not be considered further.  Note that timestamps of the readings is available, and may be reconsidered if unsatisfactory results are obtained.  
+Each of the remaining four groups represent one of the four sensors.  Exploratory data analysis show many of these variables are either blank, NA or in a few places indicate a division by zero error.  Note that a common variable "new_window" correlated with the observations that did not have these issues.  It appears these variables are an artifact from the sliding window analysis the authors speak of in their paper.  Due to the lack of data, these variables will not be considered further, unless unsatsfactory results are obtained or time permits further analysis. 
+
+Final step is to remove predictors that show little useful variance and those predictors that are highly correlated to one another.
+
+##Preprocessing Features
+Load required libraries
+```{r message=FALSE}
+suppressWarnings(library(caret))
+suppressWarnings(require(randomForest))
+suppressWarnings(require(rpart))
+suppressWarnings(require(gbm))
+suppressWarnings(require(plyr))
+```
+
+Exploratory data analysis was perform, and those variables related to the sensors will be highlighted for study. EDA showed many variables with missing data, and these will be ignored.
+```{r}
+dat <- read.csv("Data/pml-training.csv",stringsAsFactors = TRUE)
+n <- names(dat)
+allSensors <- grepl("_dumbbell",n) | grepl("_arm",n) |grepl("_belt",n) |grepl("_forearm",n)
+outcome <- grepl("classe",n)
+na19216 <- data.frame(flag = apply(dat,2,function(x) { sum(is.na(x)) == 19216 }))$flag
+blank19216 <- data.frame(flag = apply(dat,2,function(x) { sum(x == "") == 19216 }))$flag
+blank19216[is.na(blank19216)] <- FALSE
+dat <- dat[outcome | (allSensors & !na19216 & !blank19216)]
+```
+
+Checking for variables that have a low variance and therefore would not bring value to the analysis.  Note none were found after the manual data clean up above, but on the original data several were found.
+```{r}
+nearZero <- nearZeroVar(dat)
+if( length( nearZero > 0) )  dat <- dat[-nearZero]
+```
+
+Shown is one example of two variables found to be highly correlated and therefore being redundant, will have one or the other removed.  Several were found.
+```{r}
+plot(dat$gyros_arm_x,dat$gyros_arm_y)
+outcome <- grep("classe",names(dat))
+M <- abs(cor(dat[,-outcome]));diag(M) <- 0
+corVars <- findCorrelation(M)
+m <- which(M > 0.9,arr.ind=T)
+if( length( corVars > 0) )  dat <- dat[-corVars]
+```
+
+##Model Selection
+The problem is one of classfication, and therefore several machine learning classfication algorthms will be tested. For the purpose of debugging R code, a tiny sliver of the available data was used.  Model selection was based on the full data set.
+
+```{r}
+Debugging <- FALSE
+if(Debugging){
+    inSmall <- createDataPartition(dat$classe, p = 0.01, list = FALSE)
+    tidySet <- dat[inSmall,]
+} else {
+    tidySet <- dat
+}
+```
+
+The available data was partition into two data sets, one for training the model, one for final model evaluation.
+
+```{r}
+Publication <- TRUE
+intrain <- createDataPartition(tidySet$classe, p = 0.6, list = FALSE)
+trainSet <- tidySet[intrain,]
+testSet <- tidySet[-intrain,]
+```
+
+Each model was run on the same training set.  Results cached, due to the time needed to run.  For publication the cached results were used, in case the paper needed editing. In order to avoid overfitting, we run the models with five fold cross validation.  This will also allow a better out of sample error estimation.
+```{r}
+if(Publication){ #model was precomputed and stored
+    fitRPART <- readRDS("fitRPART.rds") 
+    fitRF <- readRDS("fitRF.rds")
+    fitGBM <- readRDS("fitGBM.rds")
+    testSet <- read.csv("cachedtestSet.csv")
+}else {
+    write.csv(testSet,"cachedtestSet.csv")
+    
+    #trControl <- trainControl(method="repeatedcv", number=5, repeats = 5)
+    trControl <- trainControl(method="cv", number=5)
+
+    print("RPART"); start <- Sys.time()
+    set.seed(123)
+    fitRPART <- train(classe ~ ., data = trainSet, method = "rpart", trControl = trControl)
+    saveRDS(fitRPART, "fitRPART.rds")
+
+    end <- Sys.time();  print(end-start); print("FIT"); start <- Sys.time()
+    set.seed(123)
+    fitRF <- train(classe ~ ., data = trainSet, method = "rf", trControl = trControl, prox=TRUE)
+    saveRDS(fitRF, "fitRF.rds")
+    
+    end <- Sys.time();  print(end-start); print("GBM"); start <- Sys.time()
+    set.seed(123)
+    fitGBM <- train(classe ~ ., data = trainSet, method = "gbm", trControl = trControl, verbose=FALSE)
+    saveRDS(fitGBM, "fitGBM.rds")
+    end <- Sys.time();  print(end-start)
+}
+```
+
+Random Forest has the lowest out of sample error rate
+```{r}
+r<-cbind( round(1-max(fitRF$results$Accuracy),4),
+          round(1-max(fitGBM$results$Accuracy),4),
+          round(1-max(fitRPART$results$Accuracy),4)  )
+colnames(r)<-c("  Random Forest","  Gradient Boosting", "  Recursive Partitioning")
+r
+```
+
+##Model Evaluation
+
+Now each model will be evaluated against the test data that was held out above, by running predictions.
+
+```{r}
+outcome <- grep("classe",names(testSet))
+predRPART <- predict(fitRPART, testSet[-outcome])
+predRF <- predict(fitRF, testSet[-outcome])
+predGBM <- predict(fitGBM, testSet[-outcome])
+r<-cbind( round(postResample(predRF,testSet$classe)[1],4),
+          round(postResample(predGBM,testSet$classe)[1],4),
+          round(postResample(predRPART,testSet$classe)[1],4)  )
+colnames(r)<-c("  Random Forest","  Gradient Boosting", "  Recursive Partitioning")
+r
+```
+
+Based on accuracy, which is how well the model predicts the correct outcome, and equally weighs false positives and negatives, Random Forest is best, edging out Generalized Boosted Regression.  Recursive partitioning does not fare well compared to the other algorthms.  We'll explore in further detail the first two.
+
+Sensitivity is how well the model performs in distinguishing true vs false positives.  Looking at each class (reminder the data categorizes multiple incorrect activities as well as the correct one) to verify no weak point.  The higher performing model matches favorably to the alternative.
+
+```{r}
+senRF  <- confusionMatrix(testSet$classe,predRF)$byClass[,"Sensitivity"]
+senGBM <- confusionMatrix(testSet$classe,predGBM)$byClass[,"Sensitivity"]
+r<- data.frame(Random_Forest = senRF, 
+               Stochastic_Gradient_Boosting = senGBM, 
+               Random_Forest_Higher = factor(senRF>senGBM))
+r
+```
+
+Specificity is how well the model performs in distinguishing true vs false negatives.  Looking at each class.  The higher performing model matches favorably to the alternative.
+
+```{r}
+senRF  <- confusionMatrix(testSet$classe,predRF)$byClass[,"Specificity"]
+senGBM <- confusionMatrix(testSet$classe,predGBM)$byClass[,"Specificity"]
+r<- data.frame(Random_Forest = senRF, Stochastic_Gradient_Boosting = senGBM, Random_Forest_Higher = factor(senRF>senGBM))
+r
+```
+
+Based on these results the Random Forest model is selected as the go forward model.
+
+#Final prediction
+
+Here a prediction using the above Random Forest model is made on new data that was not used to either train the model nor evaluate the performance.  These predictions are then submitted to Coursera for scoring.
+
+```{r}
+set.seed(123)
+validationSet <- read.csv("Data/pml-testing.csv",stringsAsFactors = TRUE)
+answers <- as.character(predict(fitRF,validationSet))
+print(answers)
+
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("answers/problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+pml_write_files(answers)
+
+```
+
+##Appendix
+
+##Recursive Partitioning
+```{r}
+fitRPART
+confusionMatrix(testSet$classe,predRPART)
+```
+
+##Random Forest
+```{r}
+fitRF
+confusionMatrix(testSet$classe,predRF)
+```
+
+##Gradient Boosting
+```{r}
+fitGBM
+confusionMatrix(testSet$classe,predGBM)
+```
