@@ -116,7 +116,7 @@ if(Publication){ #model was precomputed and stored
 }
 ```
 
-Random Forest has the lowest out of sample error rate
+Random Forest has the lowest estimated out of sample error rate.  Reminder that the model was run with cross validation.
 ```{r}
 r<-cbind( round(1-max(fitRF$results$Accuracy),4),
           round(1-max(fitGBM$results$Accuracy),4),
@@ -141,7 +141,7 @@ colnames(r)<-c("  Random Forest","  Gradient Boosting", "  Recursive Partitionin
 r
 ```
 
-Based on accuracy, which is how well the model predicts the correct outcome, and equally weighs false positives and negatives, Random Forest is best, edging out Generalized Boosted Regression.  Recursive partitioning does not fare well compared to the other algorthms.  We'll explore in further detail the first two.
+Based on accuracy, which is how well the model predicts the correct outcome, Random Forest is best, edging out Generalized Boosted Regression.  Recursive partitioning does not fare well compared to the other algorthms.  We'll explore in further detail the first two.
 
 Sensitivity is how well the model performs in distinguishing true vs false positives.  Looking at each class (reminder the data categorizes multiple incorrect activities as well as the correct one) to verify no weak point.  The higher performing model matches favorably to the alternative.
 
@@ -154,7 +154,7 @@ r<- data.frame(Random_Forest = senRF,
 r
 ```
 
-Specificity is how well the model performs in distinguishing true vs false negatives.  Looking at each class.  The higher performing model matches favorably to the alternative.
+Specificity is how well the model performs in distinguishing true vs false negatives.  Again, looking at each class.  The higher performing model matches favorably to the alternative.
 
 ```{r}
 senRF  <- confusionMatrix(testSet$classe,predRF)$byClass[,"Specificity"]
